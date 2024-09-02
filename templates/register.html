@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สมัครสมาชิกพนักงาน - ร้านกาแฟของเรา</title>
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #f5e5d5;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-image: url('https://via.placeholder.com/1920x1080.png?text=Coffee+Background');
+            background-size: cover;
+            background-position: center;
+        }
+        .login-container {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        h1 {
+            color: #4a3000;
+            margin-bottom: 1.5rem;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+        input {
+            margin: 0.5rem 0;
+            padding: 0.7rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        button {
+            background-color: #6f4e37;
+            color: white;
+            border: none;
+            padding: 0.7rem;
+            margin-top: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #8b6b4f;
+        }
+        .register-container {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        .login-link {
+            margin-top: 1rem;
+            color: #6f4e37;
+            text-decoration: none;
+        }
+        .login-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+ 
+    <div class="register-container">
+        <div class="coffee-icon">☕</div>
+        <h1>สมัครสมาชิกพนักงาน</h1>
+        <form action="{{ url_for('register') }}" method="post">
+            <input type="text" name="name" placeholder="ชื่อ-นามสกุล" required>
+            <input type="text" name="username" placeholder="ชื่อผู้ใช้" required>
+            <input type="password" name="password" placeholder="รหัสผ่าน" required>
+            <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน" required>
+            <input type="tel" name="phone" placeholder="เบอร์โทรศัพท์" required>
+            <button type="submit">สมัครสมาชิก</button>
+        </form>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+        {% if error %}
+        <p class="error-message">{{ error }}</p>
+        {% endif %}
+        <a href="{{ url_for('login') }}" class="login-link">มีบัญชีอยู่แล้ว? เข้าสู่ระบบ</a>
+    </div>
+</body>
+</html>
