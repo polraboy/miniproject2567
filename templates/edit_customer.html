@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แก้ไขข้อมูลพนักงาน</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <h1 class="text-2xl font-bold mb-4">แก้ไขข้อมูลพนักงาน</h1>
+        <form action="{{ url_for('edit_customer', cus_id=customer.cus_id) }}" method="POST" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="cus_id">
+                    รหัสพนักงาน
+                </label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="cus_id" name="cus_id" type="text" value="{{ customer.cus_id }}" required readonly>
+                <p class="text-xs italic text-gray-600 mt-1">รหัสพนักงานไม่สามารถแก้ไขได้</p>
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="cus_name">
+                    ชื่อ-นามสกุล
+                </label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="cus_name" name="cus_name" type="text" value="{{ customer.cus_name }}" required>
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="cus_username">
+                    ชื่อผู้ใช้
+                </label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="cus_username" name="cus_username" type="text" value="{{ customer.cus_username }}" required>
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="cus_phone">
+                    เบอร์โทรศัพท์
+                </label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="cus_phone" name="cus_phone" type="tel" value="{{ customer.cus_phone }}" required pattern="[0-9]{10}">
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="cus_password">
+                    รหัสผ่านใหม่ (ไม่จำเป็นต้องกรอกถ้าไม่ต้องการเปลี่ยน)
+                </label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="cus_password" name="cus_password" type="password">
+            </div>
+            <div class="flex items-center justify-between">
+                <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit">
+                    บันทึกการแก้ไข
+                </button>
+                <a href="{{ url_for('customer') }}" class="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800">
+                    ยกเลิก
+                </a>
+            </div>
+        </form>
+    </div>
+</body>
+</html>

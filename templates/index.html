@@ -97,6 +97,16 @@
                                     <i class="fas fa-coffee"></i> จัดการเมนูกาแฟ
                                 </a>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('customer') }}">
+                                    <i class="fas fa-user"></i> ข้อมูลพนักงาน
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('logout') }}"
+                                  ><i class="fas fa-sign-out-alt"></i> ออกจากระบบ</a
+                                >
+                              </li>
                         </ul>
                     </div>
                 </nav>
@@ -124,7 +134,15 @@
                                         <a href="{{ url_for('coffee_menu') }}" class="btn btn-primary">ไปที่หน้าจัดการเมนูกาแฟ</a>
                                     </div>
                                 </div>
+                              
                             </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h5 class="card-title"><i class="fas fa-user"></i> จัดการข้อมูลพนักงาน</h5>
+                                        <p class="card-text">เพิ่ม แก้ไข หรือลบข้อมูลพนักงาน</p>
+                                        <a href="{{ url_for('customer') }}" class="btn btn-primary">ไปที่หน้าจัดการข้อมูลพนักงาน</a>
+                                    </div>
                         </div>
                     </div>
                 </main>
