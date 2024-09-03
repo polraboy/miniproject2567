@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Sep 03, 2024 at 08:52 AM
+-- Generation Time: Sep 03, 2024 at 06:40 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -31,8 +31,16 @@ CREATE TABLE `coffee_menu` (
   `id` int(11) NOT NULL,
   `name` varchar(100) NOT NULL,
   `price` decimal(10,2) NOT NULL,
-  `description` text DEFAULT NULL
+  `description` text DEFAULT NULL,
+  `image_path` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `coffee_menu`
+--
+
+INSERT INTO `coffee_menu` (`id`, `name`, `price`, `description`, `image_path`) VALUES
+(8, 'Espresso', 45.00, 'dsad', 'coffee_images/what-is-espresso-765702-hero-03_cropped-ffbc0c7cf45a46ff846843040c8f370c.jpg');
 
 -- --------------------------------------------------------
 
@@ -64,16 +72,15 @@ INSERT INTO `customer` (`cus_id`, `cus_name`, `cus_username`, `cus_password`, `c
 CREATE TABLE `tables` (
   `table_id` varchar(10) NOT NULL,
   `table_qrcode` varchar(255) NOT NULL,
-  `capacity` int(11) NOT NULL,
-  `status` enum('พร้อมเสริฟ','กำลังทำ','เสริฟแล้ว') NOT NULL DEFAULT 'พร้อมเสริฟ'
+  `table_capacity` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `tables`
 --
 
-INSERT INTO `tables` (`table_id`, `table_qrcode`, `capacity`, `status`) VALUES
-('1', 'static\\qr_codes\\1.png', 4, '');
+INSERT INTO `tables` (`table_id`, `table_qrcode`, `table_capacity`) VALUES
+('1', 'static\\qr_codes\\1.png', 2);
 
 --
 -- Indexes for dumped tables
@@ -105,7 +112,7 @@ ALTER TABLE `tables`
 -- AUTO_INCREMENT for table `coffee_menu`
 --
 ALTER TABLE `coffee_menu`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `customer`
