@@ -1,9 +1,10 @@
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, render_template, redirect, url_for, request, flash, send_file
 import qrcode
 import re
 import pymysql
 import os
 from werkzeug.utils import secure_filename
+from io import BytesIO
 
 app = Flask(__name__)
 
@@ -58,6 +59,18 @@ def logout():
     
     return redirect(url_for("login"))
 
+
+def check_duplicate(table, column, value):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            sql = f"SELECT * FROM {table} WHERE {column} = %s"
+            cursor.execute(sql, (value,))
+            result = cursor.fetchone()
+            return result is not None
+    finally:
+        conn.close()
+        
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
@@ -75,27 +88,28 @@ def register():
             flash("เบอร์โทรศัพท์ไม่ถูกต้อง", "error")
             return render_template("register.html")
 
+        if check_duplicate("customer", "cus_username", username):
+            flash("ชื่อผู้ใช้นี้มีอยู่แล้ว กรุณาเลือกชื่อผู้ใช้อื่น", "error")
+            return render_template("register.html")
+
+        if check_duplicate("customer", "cus_phone", phone):
+            flash("เบอร์โทรศัพท์นี้ถูกใช้ไปแล้ว", "error")
+            return render_template("register.html")
+
         conn = get_db_connection()
         try:
             with conn.cursor() as cursor:
-                sql = "SELECT * FROM customer WHERE cus_username = %s"
-                cursor.execute(sql, (username,))
-                if cursor.fetchone():
-                    flash("ชื่อผู้ใช้นี้มีอยู่แล้ว", "error")
-                    return render_template("register.html")
-
                 sql = "INSERT INTO customer (cus_name, cus_username, cus_password, cus_phone) VALUES (%s, %s, %s, %s)"
                 cursor.execute(sql, (name, username, password, phone))
-                conn.commit()
-
-                flash("สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ", "success")
-                return redirect(url_for("login"))
+            conn.commit()
+            flash("สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ", "success")
+            return redirect(url_for("login"))
+        except Exception as e:
+            flash(f"เกิดข้อผิดพลาดในการสมัครสมาชิก: {str(e)}", "error")
         finally:
             conn.close()
 
     return render_template("register.html")
-
-
 @app.route("/customer")
 def customer():
     conn = get_db_connection()
@@ -117,41 +131,55 @@ def index():
 
 @app.route("/edit_customer/<int:cus_id>", methods=["GET", "POST"])
 def edit_customer(cus_id):
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cursor:
-            if request.method == "POST":
-                cus_name = request.form["cus_name"]
-                cus_username = request.form["cus_username"]
-                cus_phone = request.form["cus_phone"]
-                cus_password = request.form["cus_password"]
+    if request.method == "POST":
+        cus_name = request.form["cus_name"]
+        cus_username = request.form["cus_username"]
+        cus_phone = request.form["cus_phone"]
+        cus_password = request.form["cus_password"]
 
-                # ตรวจสอบว่ามีการเปลี่ยนรหัสผ่านหรือไม่
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cursor:
+                # ตรวจสอบข้อมูลปัจจุบันของลูกค้า
+                cursor.execute("SELECT cus_username FROM customer WHERE cus_id = %s", (cus_id,))
+                current_data = cursor.fetchone()
+                
+                # ตรวจสอบการเปลี่ยนแปลงชื่อผู้ใช้
+                if cus_username != current_data['cus_username']:
+                    if check_duplicate("customer", "cus_username", cus_username):
+                        flash("ชื่อผู้ใช้นี้มีอยู่แล้ว กรุณาเลือกชื่อผู้ใช้อื่น", "error")
+                        return redirect(url_for("edit_customer", cus_id=cus_id))
+
+                # ตรวจสอบรูปแบบเบอร์โทรศัพท์
+                if not re.match(r"^\d{10}$", cus_phone):
+                    flash("เบอร์โทรศัพท์ไม่ถูกต้อง", "error")
+                    return redirect(url_for("edit_customer", cus_id=cus_id))
+
+                # ดำเนินการแก้ไขข้อมูล
                 if cus_password:
                     sql = "UPDATE customer SET cus_name = %s, cus_username = %s, cus_phone = %s, cus_password = %s WHERE cus_id = %s"
-                    cursor.execute(
-                        sql, (cus_name, cus_username, cus_phone, cus_password, cus_id)
-                    )
+                    cursor.execute(sql, (cus_name, cus_username, cus_phone, cus_password, cus_id))
                 else:
                     sql = "UPDATE customer SET cus_name = %s, cus_username = %s, cus_phone = %s WHERE cus_id = %s"
                     cursor.execute(sql, (cus_name, cus_username, cus_phone, cus_id))
 
-                conn.commit()
-                flash("แก้ไขข้อมูลพนักงานสำเร็จ", "success")
-                return redirect(url_for("customer"))
-            else:
-                cursor.execute("SELECT * FROM customer WHERE cus_id = %s", (cus_id,))
-                customer = cursor.fetchone()
-                if customer is None:
-                    flash("ไม่พบข้อมูลพนักงาน", "error")
-                    return redirect(url_for("customer"))
-                return render_template("edit_customer.html", customer=customer)
-    except Exception as e:
-        flash(f"เกิดข้อผิดพลาดในการแก้ไขข้อมูลพนักงาน: {str(e)}", "error")
+            conn.commit()
+            flash("แก้ไขข้อมูลลูกค้าสำเร็จ", "success")
+            return redirect(url_for("customer"))
+        except Exception as e:
+            flash(f"เกิดข้อผิดพลาดในการแก้ไขข้อมูลลูกค้า: {str(e)}", "error")
+        finally:
+            conn.close()
+
+    # แสดงฟอร์มแก้ไขข้อมูล
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM customer WHERE cus_id = %s", (cus_id,))
+            customer = cursor.fetchone()
     finally:
         conn.close()
-    return redirect(url_for("customer"))
-
+    return render_template("edit_customer.html", customer=customer)
 
 @app.route("/tables")
 def tables():
@@ -168,14 +196,19 @@ def tables():
 @app.route("/add_table", methods=["POST"])
 def add_table():
     table_id = request.form["table_id"]
-    table_capacity = request.form["table_capacity"]
-    qr_code = generate_qr_code(table_id)
+    table_capacity = request.form.get("table_capacity", 0)
+    
+    if check_duplicate("tables", "table_id", table_id):
+        flash("หมายเลขโต๊ะนี้มีอยู่แล้ว กรุณาเลือกหมายเลขโต๊ะอื่น", "error")
+        return redirect(url_for("tables"))
+
+    qr_code_url = url_for('generate_qr', table_id=table_id, _external=True)
 
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            sql = "INSERT INTO tables (table_id, table_qrcode, capacity) VALUES (%s, %s, %s)"
-            cursor.execute(sql, (table_id, qr_code, table_capacity))
+            sql = "INSERT INTO tables (table_id, table_qrcode, table_capacity) VALUES (%s, %s, %s)"
+            cursor.execute(sql, (table_id, qr_code_url, table_capacity))
         conn.commit()
         flash("เพิ่มโต๊ะสำเร็จ", "success")
     except Exception as e:
@@ -185,19 +218,20 @@ def add_table():
     return redirect(url_for("tables"))
 
 
+
 @app.route("/edit_table/<string:table_id>", methods=["GET", "POST"])
 def edit_table(table_id):
     if request.method == "POST":
         new_table_id = request.form["table_id"]
-        table_capacity = request.form["table_capacity"]
+        table_capacity = request.form.get("table_capacity", 0)
 
-        qr_code = generate_qr_code(new_table_id)
+        qr_code_url = url_for('generate_qr', table_id=new_table_id, _external=True)
 
         conn = get_db_connection()
         try:
             with conn.cursor() as cursor:
-                sql = "UPDATE tables SET table_id = %s, table_qrcode = %s, table_capacity = %s  WHERE table_id = %s"
-                cursor.execute(sql, (new_table_id, qr_code, table_capacity, table_id))
+                sql = "UPDATE tables SET table_id = %s, table_qrcode = %s, table_capacity = %s WHERE table_id = %s"
+                cursor.execute(sql, (new_table_id, qr_code_url, table_capacity, table_id))
             conn.commit()
             flash("แก้ไขโต๊ะสำเร็จ", "success")
         except Exception as e:
@@ -214,7 +248,6 @@ def edit_table(table_id):
     finally:
         conn.close()
     return render_template("edit_table.html", table=table)
-
 
 @app.route("/delete_table/<string:table_id>")
 def delete_table(table_id):
@@ -248,6 +281,10 @@ def add_coffee():
     name = request.form["name"]
     price = request.form["price"]
     description = request.form["description"]
+
+    if check_duplicate("coffee_menu", "name", name):
+        flash("ชื่อเมนูนี้มีอยู่แล้ว กรุณาเลือกชื่อเมนูอื่น", "error")
+        return redirect(url_for("coffee_menu"))
 
     # Handle image upload
     if "image" in request.files:
@@ -283,22 +320,31 @@ def edit_coffee(id):
         price = request.form["price"]
         description = request.form["description"]
 
-        # Handle image upload
-        if "image" in request.files:
-            file = request.files["image"]
-            if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-                file.save(file_path)
-                image_path = f"coffee_images/{filename}"
-            else:
-                image_path = request.form["current_image"]
-        else:
-            image_path = request.form["current_image"]
-
         conn = get_db_connection()
         try:
             with conn.cursor() as cursor:
+                # Check if the new name already exists for a different coffee item
+                cursor.execute("SELECT id FROM coffee_menu WHERE name = %s AND id != %s", (name, id))
+                existing_coffee = cursor.fetchone()
+                
+                if existing_coffee:
+                    flash("ชื่อเมนูนี้มีอยู่แล้ว กรุณาเลือกชื่อเมนูอื่น", "error")
+                    return redirect(url_for("edit_coffee", id=id))
+
+                # Handle image upload
+                if "image" in request.files:
+                    file = request.files["image"]
+                    if file and allowed_file(file.filename):
+                        filename = secure_filename(file.filename)
+                        file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                        file.save(file_path)
+                        image_path = f"coffee_images/{filename}"
+                    else:
+                        image_path = request.form["current_image"]
+                else:
+                    image_path = request.form["current_image"]
+
+                # Update the coffee menu item
                 sql = "UPDATE coffee_menu SET name = %s, price = %s, description = %s, image_path = %s WHERE id = %s"
                 cursor.execute(sql, (name, price, description, image_path, id))
             conn.commit()
@@ -334,19 +380,17 @@ def delete_coffee(id):
     return redirect(url_for("coffee_menu"))
 
 
-def generate_qr_code(data):
+@app.route("/generate_qr/<table_id>")
+def generate_qr(table_id):
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(data)
+    qr.add_data(table_id)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
-
-    qr_folder = os.path.join("static", "qr_codes")
-    if not os.path.exists(qr_folder):
-        os.makedirs(qr_folder)
-
-    img_path = os.path.join(qr_folder, f"{data}.png")
-    img.save(img_path)
-    return img_path
+    
+    img_io = BytesIO()
+    img.save(img_io, 'PNG')
+    img_io.seek(0)
+    return send_file(img_io, mimetype='image/png')
 
 
 if __name__ == "__main__":
