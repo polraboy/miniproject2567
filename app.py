@@ -5,6 +5,7 @@ import pymysql
 import os
 from werkzeug.utils import secure_filename
 from io import BytesIO
+import json
 
 app = Flask(__name__)
 
@@ -378,12 +379,82 @@ def delete_coffee(id):
     finally:
         conn.close()
     return redirect(url_for("coffee_menu"))
+@app.route("/view_table_orders/<string:table_id>")
+def view_table_orders(table_id):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:   
+            sql = """
+            SELECT o.id, c.name, o.quantity, o.order_time, o.service_type
+            FROM orders o
+            JOIN coffee_menu c ON o.coffee_id = c.id
+            WHERE o.table_id = %s
+            ORDER BY o.order_time DESC
+            """
+            cursor.execute(sql, (table_id,))
+            orders = cursor.fetchall()
+        return render_template("view_table_orders.html", table_id=table_id, orders=orders)
+    finally:
+        conn.close()
+@app.route("/view_all_orders")
+def view_all_orders():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            sql = """
+            SELECT o.id, o.table_id, c.name, o.quantity, o.order_time , o.service_type
+            FROM orders o
+            JOIN coffee_menu c ON o.coffee_id = c.id
+            ORDER BY o.order_time DESC
+            """
+            cursor.execute(sql)
+            orders = cursor.fetchall()
+        return render_template("view_all_orders.html", orders=orders)
+    finally:
+        conn.close()
 
+@app.route("/order_coffee/<string:table_id>", methods=["GET", "POST"])
+def order_coffee(table_id):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM tables WHERE table_id = %s", (table_id,))
+            table = cursor.fetchone()
+            if not table:
+                flash("หมายเลขโต๊ะไม่ถูกต้อง", "error")
+                return redirect(url_for("index"))
 
+            cursor.execute("SELECT * FROM coffee_menu")
+            menu_items = cursor.fetchall()
+
+            if request.method == "POST":
+                order_details = json.loads(request.form.get('order_details', '[]'))
+                service_type = request.form.get('service_type', 'table')
+                
+                if not order_details:
+                    flash("กรุณาเลือกรายการก่อนสั่งซื้อ", "warning")
+                    return redirect(url_for("order_coffee", table_id=table_id))
+                
+                for item in order_details:
+                    cursor.execute(
+                        "INSERT INTO orders (table_id, coffee_id, quantity, service_type) VALUES (%s, %s, %s, %s)",
+                        (table_id, item['coffeeId'], item['quantity'], service_type)
+                    )
+                conn.commit()
+                
+                flash("สั่งซื้อเรียบร้อยแล้ว!", "success")
+                return redirect(url_for("view_table_orders", table_id=table_id))
+
+            return render_template("order_coffee.html", table_id=table_id, menu_items=menu_items)
+    finally:
+        conn.close()
 @app.route("/generate_qr/<table_id>")
 def generate_qr(table_id):
+    # สร้าง URL สำหรับการสั่งกาแฟที่โต๊ะนั้นๆ
+    order_url = url_for('order_coffee', table_id=table_id, _external=True)
+    
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(table_id)
+    qr.add_data(order_url)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
     
