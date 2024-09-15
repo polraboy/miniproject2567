@@ -1,4 +1,5 @@
-from flask import Flask, render_template, redirect, url_for, request, flash, send_file
+from flask import Flask, render_template, redirect, url_for, request, flash, send_file,jsonify
+from datetime import datetime, date
 import qrcode
 import re
 import pymysql
@@ -6,13 +7,20 @@ import os
 from werkzeug.utils import secure_filename
 from io import BytesIO
 import json
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+import logging
 app = Flask(__name__)
 
 app.config["UPLOAD_FOLDER"] = "static/coffee_images"
 app.config["ALLOWED_EXTENSIONS"] = {"png", "jpg", "jpeg", "gif"}
 app.secret_key = os.urandom(24)  # สร้าง secret key แบบสุ่ม
-
+logging.basicConfig(level=logging.DEBUG)    
 
 def get_db_connection():
     return pymysql.connect(
@@ -388,7 +396,7 @@ def view_table_orders(table_id):
             SELECT o.id, c.name, o.quantity, o.order_time, o.service_type
             FROM orders o
             JOIN coffee_menu c ON o.coffee_id = c.id
-            WHERE o.table_id = %s
+            WHERE o.table_id = %s AND o.status = 'active'
             ORDER BY o.order_time DESC
             """
             cursor.execute(sql, (table_id,))
@@ -428,12 +436,23 @@ def order_coffee(table_id):
             menu_items = cursor.fetchall()
 
             if request.method == "POST":
-                order_details = json.loads(request.form.get('order_details', '[]'))
-                service_type = request.form.get('service_type', 'table')
+                if request.is_json:
+                    # สำหรับ AJAX request
+                    data = request.get_json()
+                    order_details = data.get('order_details', [])
+                    service_type = data.get('service_type', 'table')
+                else:
+                    # สำหรับ form submission ปกติ
+                    order_details = json.loads(request.form.get('order_details', '[]'))
+                    service_type = request.form.get('service_type', 'table')
                 
                 if not order_details:
-                    flash("กรุณาเลือกรายการก่อนสั่งซื้อ", "warning")
-                    return redirect(url_for("order_coffee", table_id=table_id))
+                    message = "กรุณาเลือกรายการก่อนสั่งซื้อ"
+                    if request.is_json:
+                        return jsonify({"status": "error", "message": message}), 400
+                    else:
+                        flash(message, "error")
+                        return render_template("order_coffee.html", table_id=table_id, menu_items=menu_items)
                 
                 for item in order_details:
                     cursor.execute(
@@ -442,10 +461,194 @@ def order_coffee(table_id):
                     )
                 conn.commit()
                 
-                flash("สั่งซื้อเรียบร้อยแล้ว!", "success")
-                return redirect(url_for("view_table_orders", table_id=table_id))
+                message = "สั่งซื้อเรียบร้อยแล้ว! ขอบคุณที่ใช้บริการ"
+                if request.is_json:
+                    return jsonify({"status": "success", "message": message}), 200
+                else:
+                    flash(message, "success")
+                    return redirect(url_for("order_coffee", table_id=table_id))
 
             return render_template("order_coffee.html", table_id=table_id, menu_items=menu_items)
+    finally:
+        conn.close()
+@app.route("/complete_table_order/<string:table_id>", methods=["POST"])
+def complete_table_order(table_id):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # ดึงข้อมูลออร์เดอร์ทั้งหมดของโต๊ะนี้ที่ยังไม่เสร็จสิ้น
+            cursor.execute("""
+                SELECT o.id, o.coffee_id, o.quantity, o.service_type, o.order_time, c.price
+                FROM orders o
+                JOIN coffee_menu c ON o.coffee_id = c.id
+                WHERE o.table_id = %s AND o.status = 'active'
+            """, (table_id,))
+            orders = cursor.fetchall()
+
+            total_amount = 0
+            for order in orders:
+                # คำนวณยอดขายรวม
+                total_amount += order['quantity'] * order['price']
+                
+                # บันทึกออร์เดอร์ลงในตาราง completed_orders
+                cursor.execute("""
+                    INSERT INTO completed_orders 
+                    (order_id, table_id, coffee_id, quantity, price, service_type, order_time)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (order['id'], table_id, order['coffee_id'], order['quantity'], 
+                      order['price'], order['service_type'], order['order_time']))
+                
+                # อัปเดตสถานะออร์เดอร์เป็น 'completed'
+                cursor.execute("UPDATE orders SET status = 'completed' WHERE id = %s", (order['id'],))
+
+            # อัปเดตหรือเพิ่มข้อมูลในตาราง daily_sales
+            today = date.today()
+            cursor.execute("""
+                INSERT INTO daily_sales (sale_date, total_amount)
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE total_amount = total_amount + VALUES(total_amount)
+            """, (today, total_amount))
+
+            conn.commit()
+            flash(f"ออร์เดอร์สำหรับโต๊ะ {table_id} เสร็จสิ้นแล้ว และยอดขายถูกบันทึกแล้ว", "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"เกิดข้อผิดพลาด: {str(e)}", "error")
+    finally:
+        conn.close()
+    return redirect(url_for('view_table_orders', table_id=table_id))
+def generate_pdf_bill(sale_date, daily_sales, total_amount):
+    try:
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter,
+                                rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=18)
+        elements = []
+
+        # ลงทะเบียนฟอนต์ไทย
+        font_path = os.path.join(os.path.dirname(__file__), "THSarabunNew.ttf")
+        bold_font_path = os.path.join(os.path.dirname(__file__), "THSarabunNew-Bold.ttf")
+
+        pdfmetrics.registerFont(TTFont("THSarabunNew", font_path))
+        if os.path.exists(bold_font_path):
+            pdfmetrics.registerFont(TTFont("THSarabunNew-Bold", bold_font_path))
+        else:
+            logging.warning("THSarabunNew-Bold font not found, using regular font for bold text")
+            pdfmetrics.registerFont(TTFont("THSarabunNew-Bold", font_path))
+
+        # สร้างสไตล์
+        styles = getSampleStyleSheet()
+        styles["Normal"].fontName = "THSarabunNew"
+        styles["Normal"].fontSize = 18  # ปรับขนาดฟอนต์ให้เหมาะสม
+        styles["Heading1"].fontName = "THSarabunNew-Bold"
+        styles["Heading1"].fontSize = 24  # ปรับหัวข้อให้ใหญ่ขึ้น
+        styles["Heading2"].fontName = "THSarabunNew-Bold"
+        styles["Heading2"].fontSize = 18
+
+        # เพิ่มหัวเรื่อง
+        title = Paragraph(f"<b>สรุปยอดขายประจำวันนี้ - {sale_date}</b>", styles['Heading1'])
+        elements.append(title)
+
+        # เพิ่มช่องว่าง
+        elements.append(Spacer(1, 12))
+
+        # เพิ่มข้อมูลขายรายวันลงในตาราง
+        if daily_sales:
+            data = [['เมนู', 'จำนวน', 'ราคา']]
+            for item in daily_sales:
+                data.append([item['name'], str(item['total_quantity']), f"{item['total_amount']:.2f}"])
+            data.append(['รวม', '', f"{total_amount:.2f}"])
+
+            table = Table(data, colWidths=[200, 100, 100])  # ปรับขนาดคอลัมน์
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'THSarabunNew-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 16),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.whitesmoke),
+                ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+                ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 1), (-1, -1), 'THSarabunNew'),
+                ('FONTSIZE', (0, 1), (-1, -1), 14),
+                ('TOPPADDING', (0, 1), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            elements.append(table)
+        else:
+            elements.append(Paragraph("No sales data available for this day.", styles['Normal']))
+
+        # สร้างเอกสาร PDF
+        doc.build(elements)
+        buffer.seek(0)
+        return buffer
+    except Exception as e:
+        logging.error(f"Error generating PDF: {str(e)}")
+        raise
+@app.route("/daily_summary", methods=["GET", "POST"])
+def daily_summary():
+    if request.method == "POST":
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cursor:
+                today = date.today()
+                logging.debug(f"Generating summary for date: {today}")
+                
+                cursor.execute("""
+                    SELECT c.name, SUM(co.quantity) as total_quantity, SUM(co.quantity * co.price) as total_amount
+                    FROM completed_orders co
+                    JOIN coffee_menu c ON co.coffee_id = c.id
+                    WHERE DATE(co.completed_at) = DATE(%s)
+                    GROUP BY c.name
+                """, (today,))
+                daily_sales = cursor.fetchall()
+
+                logging.debug(f"Daily sales data: {daily_sales}")
+
+                if not daily_sales:
+                    logging.warning(f"No sales data available for {today}")
+                    flash(f"ไม่มีข้อมูลการขายสำหรับวันที่ {today}", "warning")
+                    return redirect(url_for('daily_summary'))
+
+                # คำนวณ total_amount
+                total_amount = sum(item['total_amount'] for item in daily_sales)
+
+                logging.debug("Generating PDF")
+                pdf_buffer = generate_pdf_bill(today, daily_sales, total_amount)
+                
+                logging.debug("Sending PDF file")
+                return send_file(
+                    pdf_buffer,
+                    as_attachment=True,
+                    download_name=f"daily_summary_{today}.pdf",
+                    mimetype='application/pdf'
+                )
+        except Exception as e:
+            conn.rollback()
+            logging.error(f"An error occurred: {str(e)}")
+            flash(f"เกิดข้อผิดพลาด: {str(e)}", "error")
+        finally:
+            conn.close()
+
+    return render_template('daily_summary.html')
+
+@app.route("/view_daily_summary")
+def view_daily_summary():
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM daily_sales ORDER BY sale_date DESC")
+            summaries = cursor.fetchall()
+            
+            # Convert details string back to list of dicts
+            for summary in summaries:
+                if summary['details']:
+                    summary['details'] = eval(summary['details'])
+                else:
+                    summary['details'] = []
+                    
+        return render_template('view_daily_summary.html', summaries=summaries)
     finally:
         conn.close()
 @app.route("/generate_qr/<table_id>")

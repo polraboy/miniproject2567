@@ -119,7 +119,25 @@
             </div>
         </div>
     </div>
-    
+    <!-- Add this modal for the confirmation message -->
+    <div class="modal fade" id="orderConfirmationModal" tabindex="-1" role="dialog" aria-labelledby="orderConfirmationModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="orderConfirmationModalLabel">การสั่งซื้อเสร็จสมบูรณ์</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmationMessage"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">ปิด</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         const menuItems = document.querySelectorAll('.menu-item');
@@ -153,6 +171,8 @@
             });
         });
     
+
+        
         function updateOrder(coffeeId, name, price, quantity) {
             const existingItemIndex = orderDetails.findIndex(item => item.coffeeId === coffeeId);
     
@@ -183,7 +203,109 @@
             totalPriceElement.textContent = total.toFixed(2);
             orderDetailsInput.value = JSON.stringify(orderDetails);
         }
+        $("#order-button").click(function() {
+            var orderDetails = [];
+            $(".order-item").each(function() {
+                var coffeeId = $(this).data("coffee-id");
+                var quantity = parseInt($(this).find(".quantity").text());
+                orderDetails.push({coffeeId: coffeeId, quantity: quantity});
+            });
+    
+            var serviceType = $("input[name='service_type']:checked").val();
+    
+            $.ajax({
+                url: "/order_coffee/{{ table_id }}",
+                method: "POST",
+                data: {
+                    order_details: JSON.stringify(orderDetails),
+                    service_type: serviceType
+                },
+                success: function(response) {
+                    $("#confirmationMessage").text(response.message);
+                    $("#orderConfirmationModal").modal("show");
+                    // เคลียร์รายการสั่งซื้อ
+                    $("#order-summary .order-item").remove();
+                    $("#total-price").text("0.00");
+                },
+                error: function(xhr) {
+                    var response = JSON.parse(xhr.responseText);
+                    $("#confirmationMessage").text(response.message);
+                    $("#orderConfirmationModal").modal("show");
+                }
+            });
+        });
     });
     </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const orderForm = document.getElementById('orderForm');
+            const orderSummary = document.getElementById('order-summary');
+            const totalPriceElement = document.getElementById('total-price');
+            let orderDetails = [];
+        
+            // ฟังก์ชันสำหรับอัปเดตสรุปรายการสั่งซื้อ
+            function updateOrderSummary() {
+                let summaryHTML = '<h2>สรุปรายการสั่งซื้อ</h2><ul>';
+                let totalPrice = 0;
+                orderDetails.forEach(item => {
+                    summaryHTML += `<li>${item.name} x ${item.quantity} - ฿${item.price * item.quantity}</li>`;
+                    totalPrice += item.price * item.quantity;
+                });
+                summaryHTML += '</ul>';
+                orderSummary.innerHTML = summaryHTML;
+                totalPriceElement.textContent = totalPrice.toFixed(2);
+            }
+        
+            // เพิ่มรายการสั่งซื้อ
+            document.querySelectorAll('.add-to-order').forEach(button => {
+                button.addEventListener('click', function() {
+                    const coffeeId = this.getAttribute('data-id');
+                    const name = this.getAttribute('data-name');
+                    const price = parseFloat(this.getAttribute('data-price'));
+                    
+                    const existingItem = orderDetails.find(item => item.coffeeId === coffeeId);
+                    if (existingItem) {
+                        existingItem.quantity += 1;
+                    } else {
+                        orderDetails.push({ coffeeId, name, price, quantity: 1 });
+                    }
+                    updateOrderSummary();
+                });
+            });
+        
+            // ส่งคำสั่งซื้อ
+            orderForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(orderForm);
+                formData.append('order_details', JSON.stringify(orderDetails));
+        
+                fetch(orderForm.action, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                    } else {
+                        return response.json();
+                    }
+                })
+                .then(data => {
+                    if (data && data.message) {
+                        alert(data.message);
+                        if (data.status === 'success') {
+                            orderDetails = [];
+                            updateOrderSummary();
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('เกิดข้อผิดพลาดในการสั่งซื้อ กรุณาลองอีกครั้ง');
+                });
+            });
+        });
+        </script>
 </body>
 </html>
