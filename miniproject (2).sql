@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Sep 10, 2024 at 09:23 PM
+-- Generation Time: Sep 15, 2024 at 06:00 PM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.2.4
 
@@ -40,8 +40,11 @@ CREATE TABLE `coffee_menu` (
 --
 
 INSERT INTO `coffee_menu` (`id`, `name`, `price`, `description`, `image_path`) VALUES
-(8, 'Espresso hot', 45.00, 'dsad', 'coffee_images/what-is-espresso-765702-hero-03_cropped-ffbc0c7cf45a46ff846843040c8f370c.jpg'),
-(10, 'coffee', 20.00, 'ss', 'coffee_images/what-is-espresso-765702-hero-03_cropped-ffbc0c7cf45a46ff846843040c8f370c.jpg');
+(8, 'Espresso hot', 45.00, 'ร้อนมากๆ', 'coffee_images/what-is-espresso-765702-hero-03_cropped-ffbc0c7cf45a46ff846843040c8f370c.jpg'),
+(12, 'โอเลี้ยง', 20.00, 'โอเลี้ยงยกล้อ ', 'coffee_images/e0873963-0fa0-4aa2-8c17-3d08f259ba78.jpg'),
+(13, 'คาปูชิโน่', 50.00, 'ดีด3วัน3คืน', 'coffee_images/640px-Cappuccino_at_Sightglass_Coffee.jpg'),
+(14, 'โกโก้', 50.00, 'เย็นนะจ้ะ', 'coffee_images/-769x1024.jpg'),
+(15, 'ชาเขียว', 60.00, 'หอมอย่างกับอยู่บนดอย', 'coffee_images/jpg');
 
 -- --------------------------------------------------------
 
@@ -60,6 +63,18 @@ CREATE TABLE `completed_orders` (
   `order_time` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `completed_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+
+--
+-- Dumping data for table `completed_orders`
+--
+
+INSERT INTO `completed_orders` (`id`, `order_id`, `table_id`, `coffee_id`, `quantity`, `price`, `service_type`, `order_time`, `completed_at`) VALUES
+(23, 15, '1', 12, 2, 20.00, 'self', '2024-09-12 06:17:30', '2024-09-13 15:12:02'),
+(24, 16, '1', 8, 2, 45.00, 'self', '2024-09-12 06:17:30', '2024-09-13 15:12:02'),
+(25, 17, '1', 13, 2, 50.00, 'self', '2024-09-12 06:17:30', '2024-09-13 15:12:02'),
+(26, 18, '1', 15, 1, 60.00, 'self', '2024-09-12 06:17:30', '2024-09-13 15:12:02'),
+(27, 19, '1', 13, 2, 50.00, 'self', '2024-09-12 06:29:08', '2024-09-13 15:12:02'),
+(28, 20, '1', 12, 2, 20.00, 'table', '2024-09-12 06:34:18', '2024-09-13 15:12:02');
 
 -- --------------------------------------------------------
 
@@ -93,8 +108,16 @@ CREATE TABLE `daily_sales` (
   `id` int(11) NOT NULL,
   `sale_date` date NOT NULL,
   `total_amount` decimal(10,2) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `details` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+
+--
+-- Dumping data for table `daily_sales`
+--
+
+INSERT INTO `daily_sales` (`id`, `sale_date`, `total_amount`, `created_at`, `details`) VALUES
+(19, '2024-09-13', 430.00, '2024-09-13 15:12:02', NULL);
 
 -- --------------------------------------------------------
 
@@ -108,16 +131,26 @@ CREATE TABLE `orders` (
   `coffee_id` int(11) NOT NULL,
   `quantity` int(11) NOT NULL,
   `order_time` timestamp NOT NULL DEFAULT current_timestamp(),
-  `service_type` enum('table','self') NOT NULL DEFAULT 'table'
+  `service_type` enum('table','self') NOT NULL DEFAULT 'table',
+  `status` enum('active','completed') DEFAULT 'active'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `orders`
 --
 
-INSERT INTO `orders` (`id`, `table_id`, `coffee_id`, `quantity`, `order_time`, `service_type`) VALUES
-(1, '2', 10, 1, '2024-09-10 10:08:32', 'table'),
-(2, '2', 10, 2, '2024-09-10 11:01:40', 'self');
+INSERT INTO `orders` (`id`, `table_id`, `coffee_id`, `quantity`, `order_time`, `service_type`, `status`) VALUES
+(13, '2', 12, 1, '2024-09-11 04:16:11', 'self', 'active'),
+(14, '2', 12, 1, '2024-09-12 04:29:31', 'self', 'active'),
+(15, '1', 12, 2, '2024-09-12 06:17:30', 'self', 'completed'),
+(16, '1', 8, 2, '2024-09-12 06:17:30', 'self', 'completed'),
+(17, '1', 13, 2, '2024-09-12 06:17:30', 'self', 'completed'),
+(18, '1', 15, 1, '2024-09-12 06:17:30', 'self', 'completed'),
+(19, '1', 13, 2, '2024-09-12 06:29:08', 'self', 'completed'),
+(20, '1', 12, 2, '2024-09-12 06:34:18', 'table', 'completed'),
+(21, '1', 13, 2, '2024-09-15 15:50:53', 'self', 'active'),
+(22, '1', 13, 1, '2024-09-15 15:55:00', 'table', 'active'),
+(23, '1', 13, 2, '2024-09-15 15:55:11', 'self', 'active');
 
 -- --------------------------------------------------------
 
@@ -137,7 +170,8 @@ CREATE TABLE `tables` (
 
 INSERT INTO `tables` (`table_id`, `table_qrcode`, `table_capacity`) VALUES
 ('1', 'http://127.0.0.1:5000/generate_qr/1', 4),
-('2', 'http://127.0.0.1:5000/generate_qr/2', 4);
+('2', 'http://127.0.0.1:5000/generate_qr/2', 4),
+('3', 'http://127.0.0.1:5000/generate_qr/3', 4);
 
 --
 -- Indexes for dumped tables
@@ -154,7 +188,7 @@ ALTER TABLE `coffee_menu`
 --
 ALTER TABLE `completed_orders`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `order_id` (`order_id`);
+  ADD KEY `completed_orders_ibfk_1` (`order_id`);
 
 --
 -- Indexes for table `customer`
@@ -166,7 +200,8 @@ ALTER TABLE `customer`
 -- Indexes for table `daily_sales`
 --
 ALTER TABLE `daily_sales`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `sale_date` (`sale_date`);
 
 --
 -- Indexes for table `orders`
@@ -190,13 +225,13 @@ ALTER TABLE `tables`
 -- AUTO_INCREMENT for table `coffee_menu`
 --
 ALTER TABLE `coffee_menu`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- AUTO_INCREMENT for table `completed_orders`
 --
 ALTER TABLE `completed_orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=29;
 
 --
 -- AUTO_INCREMENT for table `customer`
@@ -208,13 +243,13 @@ ALTER TABLE `customer`
 -- AUTO_INCREMENT for table `daily_sales`
 --
 ALTER TABLE `daily_sales`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
 
 --
 -- AUTO_INCREMENT for table `orders`
 --
 ALTER TABLE `orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
 
 --
 -- Constraints for dumped tables
@@ -224,7 +259,7 @@ ALTER TABLE `orders`
 -- Constraints for table `completed_orders`
 --
 ALTER TABLE `completed_orders`
-  ADD CONSTRAINT `completed_orders_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`);
+  ADD CONSTRAINT `completed_orders_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `orders`
